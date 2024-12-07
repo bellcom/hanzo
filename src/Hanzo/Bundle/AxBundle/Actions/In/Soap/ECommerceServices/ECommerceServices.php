@@ -134,6 +134,51 @@ class ECommerceServices extends SoapService
         // .....<ze code>......
         // ....................
 
+        if ('da_DK' !== $this->request->getLocale()) {
+            $master = strtolower(trim($item->ItemId));
+
+            // Check master
+            $missing = [];
+            if (!array_key_exists($master, $products_id_map)) {
+                $missing[] = $master;
+            }
+
+            // Run through variants
+            foreach ($item->InventDim as $entry) {
+                $variant = strtolower(trim($item->ItemId . ' ' . $entry->InventColorId . ' ' . $entry->InventSizeId));
+
+                if (! array_key_exists($variant, $products_id_map)) {
+                    $missing[] = $variant;
+                }
+            }
+
+            if (count($missing)) {
+                $mailBody = 'Der opstod en fejl under produktsynkroniseringen og synkroniseringen stoppede! Følgende produkter er ikke uploadet i den danske version.\n\r\n\r';
+
+                // Mail credentials
+                $mailer = $this->hanzo->container->get('mail_manager');
+                $mailer->setTo('it-drift@pompdelux.dk', 'POMPdeLUX IT afdeling');
+
+                // Run through
+                foreach($missing AS $missingItem) {
+
+                    $errors = [
+                      'InventId: ' . $missingItem,
+                    ];
+
+                    $mailBody .= 'InventId: ' . $missingItem . '\n\r';
+                }
+
+                // Send mail
+                $mailer->setBody($mailBody);
+                $mailer->send();
+
+                // Log
+                $this->logger->info(__METHOD__.' '.__LINE__.': No WebDomain parameters', $errors);
+                return self::responseStatus('Error', 'SyncItemResult', $errors);
+            }
+        }
+
         try {
             // loop over all items
             $index = 0;
